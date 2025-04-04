@@ -3,9 +3,10 @@ import pandas as pd
 import altair as alt
 import seaborn as sns
 import matplotlib.pyplot as plt
+import time
 import requests
 
-# CSS personnalisé
+# Style CSS personnalisé
 custom_css = """
 <style>
 div.stButton > button:first-child {
@@ -24,103 +25,150 @@ h1 {
 st.markdown(custom_css, unsafe_allow_html=True)
 
 # Titre et Introduction
-st.title("Data Cost Expert : Discutez avec vos données")
+st.title("Expert en Données : Parle à tes Données !")
 st.write("""
-Cette plateforme permet d'analyser facilement les données et de résoudre des problèmes métier.
-- **Téléchargez vos données** (format CSV)
-- **Visualisez des insights**
-- **Posez des questions** en langage naturel
-- **Contactez un expert en cas de besoin**
+Cette plateforme t'aide à comprendre tes données et à résoudre des problèmes.
+- **Télécharge tes données** (CSV ou Excel)
+- **Regarde des graphiques**
+- **Pose des questions** comme si tu parlais à un ami
+- **Demande de l'aide à un expert si besoin**
 """)
 
-# Téléchargement & Aperçu des Données
-st.header("Téléchargement & Aperçu des Données")
-uploaded_file = st.file_uploader("Téléchargez votre fichier CSV", type=["csv"])
+# Téléchargement et Aperçu des Données
+st.header("Télécharge tes Données et Regarde-les")
+uploaded_file = st.file_uploader("Choisis ton fichier (CSV ou Excel)", type=["csv", "xlsx", "xls"])
 
 if uploaded_file is not None:
-    data = pd.read_csv(uploaded_file, on_bad_lines='skip')
+    max_rows = 1000  # Limite le nombre de lignes
+    max_file_size_mb = 5  # Limite la taille du fichier en Mo
+    max_file_size_bytes = max_file_size_mb * 1024 * 1024  # Convertit les Mo en octets
 
-    # Clean up column names
-    data.columns = [col.replace(':', '\\:') if ':' in col else col for col in data.columns]
-
-    # Clean up data types
-    for col in data.columns:
-        if data[col].dtype == 'object':
-            try:
-                data[col] = pd.to_numeric(data[col])
-            except ValueError:
-                pass
-
-    # Remove the "Unnamed: 0" column if it exists
-    if "Unnamed: 0" in data.columns:
-        data = data.drop(columns=["Unnamed: 0"])
-
-    # Aperçu des données
-    st.subheader("Aperçu des Données")
-    st.dataframe(data.head())
-    
-    # Types de données
-    st.subheader("Types de Données")
-    st.write(data.dtypes)
-    
-    # Valeurs manquantes
-    st.subheader("Valeurs Manquantes")
-    missing_values = data.isnull().sum()
-    st.write(missing_values[missing_values > 0])
-    
-    # Statistiques Descriptives
-    st.subheader("Statistiques Descriptives")
-    st.write(data.describe())
-    
-    # Visualisation des Données
-    st.header("Visualisation des Données")
-    numeric_columns = data.select_dtypes(include=["number"]).columns.tolist()
-    
-    if numeric_columns:
-        selected_column = st.selectbox("Sélectionnez une colonne pour l'histogramme", numeric_columns)
-        hist_chart = alt.Chart(data).mark_bar().encode(
-            alt.X(selected_column, bin=alt.Bin(maxbins=30)),
-            y='count()'
-        ).properties(width=600, height=400).interactive()
-        st.altair_chart(hist_chart, use_container_width=True)
-        
-        st.subheader("Corrélation entre Variables")
-        # Sélectionne uniquement les colonnes numériques pour la corrélation
-        numeric_data = data.select_dtypes(include=['number'])
-        if not numeric_data.empty: # check if numeric_data is empty
-            fig, ax = plt.subplots()
-            sns.heatmap(numeric_data.corr(), annot=True, cmap='coolwarm', fmt='.2f', ax=ax)
-            st.pyplot(fig)
-        else:
-            st.info("Aucune colonne numérique disponible pour la corrélation.")
-        
+    if uploaded_file.size > max_file_size_bytes:
+        st.error(f"Oups ! Le fichier est trop gros (plus de {max_file_size_mb} Mo). Essaie avec un fichier plus petit.")
     else:
-        st.info("Aucune colonne numérique disponible pour la visualisation.")
-    
-    # Assistance IA avec API Mistral AI (gratuite)
-    st.header("Assistance IA")
-    user_question = st.text_input("Posez une question sur les données :")
-    if st.button("Demander à Marina AI"):
-        if user_question:
-            with st.spinner("Analyse en cours..."):
-                api_url = "https://api.mistral.ai/v1/chat/completions"
-                headers = {"Authorization": "Bearer jC7bcWcJBWznK0gFZ8mefGWPgOouBfCK", "Content-Type": "application/json"}
-                data_string = data.to_csv(index=False) # Convertit le dataframe en string (CSV)
-                payload = {
-                    "model": "mistral-tiny",
-                    "messages": [{"role": "user", "content": f"Voici les données : {data_string}. {user_question}"}],
-                    "max_tokens": 100
-                }
-                response = requests.post(api_url, json=payload, headers=headers)
-                
-                if response.status_code == 200:
-                    response_data = response.json()
-                    response_text = response_data.get("choices", [{}])[0].get("message", {}).get("content", "Pas de réponse disponible.")
-                    st.subheader("Réponse de Marina AI")
-                    st.write(response_text)
+        try:
+            if uploaded_file.name.endswith(('.xlsx', '.xls')):
+                data = pd.read_excel(uploaded_file)
+            else:
+                data = pd.read_csv(uploaded_file)
+
+            if len(data) > max_rows:
+                st.warning(f"Attention ! Ton fichier a beaucoup de lignes ({len(data)}). On va regarder les {max_rows} premières.")
+                data = data.head(max_rows)  # Ne garde que les premières lignes
+
+            # Nettoyage des Données
+            data = data.dropna()
+            data = data.drop_duplicates()
+            data.columns = [col.replace(':', '\\:').strip() for col in data.columns]
+            for col in data.columns:
+                if data[col].dtype == 'object':
+                    try:
+                        data[col] = pd.to_numeric(data[col])
+                    except ValueError:
+                        pass
+            if "Unnamed: 0" in data.columns:
+                data = data.drop(columns=["Unnamed: 0"])
+
+            # Aperçu des Données
+            st.subheader("Voici tes Données :")
+            st.dataframe(data.head())
+
+            # Types de Données
+            st.subheader("Types de Données :")
+            st.write(data.dtypes)
+
+            # Statistiques Descriptives
+            st.subheader("Quelques Chiffres :")
+            st.write(data.describe())
+
+            # Visualisation des Données
+            st.header("Graphiques :")
+            numeric_columns = data.select_dtypes(include=["number"]).columns.tolist()
+
+            if numeric_columns:
+                selected_column = st.selectbox("Choisis une colonne pour le graphique :", numeric_columns)
+                hist_chart = alt.Chart(data).mark_bar().encode(
+                    alt.X(selected_column, bin=alt.Bin(maxbins=30)),
+                    y='count()'
+                ).properties(width=600, height=400).interactive()
+                st.altair_chart(hist_chart, use_container_width=True)
+
+                st.subheader("Relations entre les Chiffres :")
+                numeric_data = data.select_dtypes(include=['number'])
+                if not numeric_data.empty:
+                    fig, ax = plt.subplots()
+                    sns.heatmap(numeric_data.corr(), annot=True, cmap='coolwarm', fmt='.2f', ax=ax)
+                    st.pyplot(fig)
                 else:
-                    st.error("Erreur lors de la communication avec l'API Mistral AI.")
-        else:
-            st.warning("Veuillez entrer une question.")
+                    st.info("Pas de chiffres à comparer ici.")
+
+            else:
+                st.info("Pas de chiffres à montrer en graphique.")
+
+            # Aide de l'IA (Marina AI)
+            st.header("Pose tes Questions à Marina AI :")
+            user_question = st.text_input("Pose ta question :")
+
+            # Test de la connexion à l'API Mistral AI
+            api_url = "https://api.mistral.ai/v1/chat/completions"
+            headers = {"Authorization": "Bearer jC7bcWcJBWznK0gFZ8mefGWPgOouBfCK", "Content-Type": "application/json"}
+
+            test_payload = {
+                "model": "mistral-tiny",
+                "messages": [{"role": "user", "content": "Salut, ça marche ?"}],
+                "max_tokens": 10
+            }
+
+            print("Test de l'API Mistral AI...")
+            try:
+                test_response = requests.post(api_url, json=test_payload, headers=headers)
+                test_response.raise_for_status()
+                print("L'API Mistral AI est OK !")
+                print(test_response.json())
+            except requests.exceptions.RequestException as e:
+                print(f"Erreur avec l'API Mistral AI : {e}")
+                print(f"Réponse : {test_response.text if 'test_response' in locals() else 'Rien à dire'}")
+            else:
+                if st.button("Demande à Marina AI"):
+                    if user_question:
+                        with st.spinner("Marina AI réfléchit..."):
+                            question_directe = f"Calcule et donne la réponse à cette question : {user_question}. Donne uniquement le résultat et un avis concis."
+
+                            payload = {
+                                "model": "mistral-tiny",
+                                "messages": [{"role": "user", "content": f"Voici les données : {data.head(5).to_csv(index=False)}. {question_directe}"}],
+                                "max_tokens": 80,
+                                "temperature": 0.3,
+                            }
+                            retries = 3
+                            delay = 5
+
+                            for attempt in range(retries):
+                                try:
+                                    response = requests.post(api_url, json=payload, headers=headers)
+                                    response.raise_for_status()
+                                    response_data = response.json()
+                                    response_text = response_data.get("choices", [{}])[0].get("message", {}).get("content", "Je ne sais pas quoi dire.")
+                                    st.subheader("Marina AI dit :")
+                                    st.write(response_text)
+                                    break
+                                except requests.exceptions.HTTPError as e:
+                                    if e.response.status_code == 429 and attempt < retries - 1:
+                                        time.sleep(delay)
+                                        delay *= 2
+                                    else:
+                                        st.error(f"Erreur avec l'API Mistral AI : {e}")
+                                        if 'response' in locals():
+                                            st.error(f"Texte de la réponse : {response.text}")
+                                        break
+                                except Exception as e:
+                                    st.error(f"Une erreur s'est produite : {e}")
+                                    break
+                            else:
+                                st.warning("Pose une question, s'il te plaît.")
+
+        except Exception as e:
+            st.error(f"Une erreur s'est produite : {e}")
+
 else:
-    st.info("Veuillez télécharger un fichier CSV pour commencer l'analyse.")
+    st.info("Télécharge un fichier CSV ou Excel pour commencer.")
