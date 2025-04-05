@@ -25,17 +25,17 @@ h1 {
 st.markdown(custom_css, unsafe_allow_html=True)
 
 # Titre et Introduction
-st.title("Expert en Données : Parle à tes Données !")
+st.title("Expert en Données : Interrogez vos Données et optimiser votre entreprise !")
 st.write("""
-Cette plateforme vous aide à comprendre vos données et à résoudre des problèmes.
-- **Téléchargez vos données** (CSV ou Excel)
-- **Personnalisez vos graphiques**
-- **Interrogez vos données naturellement**
-- **Demandez de l'aide à Datacostexpert le spécialiste de la réduction de coûts*
+Cette plateforme t'aide à comprendre tes données et à résoudre des problèmes.
+- **Télécharge tes données** (CSV ou Excel)
+- **Personnalise tes graphiques**
+- **Interroge tes données naturellement**
+- *Demande de l'aide à Datacostexpert le spécialiste de la réduction de coûts*
 """)
 
 # Téléchargement et Aperçu des Données
-st.header("Télécharge tes Données et Regarde-les")
+st.header("Téléchargez vos Données et Regarde-les")
 uploaded_file = st.file_uploader("Choisis ton fichier (CSV ou Excel)", type=["csv", "xlsx", "xls"])
 
 if uploaded_file is not None:
@@ -81,32 +81,97 @@ if uploaded_file is not None:
             st.subheader("Quelques Chiffres :")
             st.write(data.describe())
 
-            # Visualisation des Données
-            st.header("Graphiques :")
-            numeric_columns = data.select_dtypes(include=["number"]).columns.tolist()
+            # Fonctionnalités d'Analyse Supplémentaires
+            st.subheader("Explore tes Données Plus Loin :")
 
             if numeric_columns:
-                selected_column = st.selectbox("Choisis une colonne pour le graphique :", numeric_columns)
-                hist_chart = alt.Chart(data).mark_bar().encode(
-                    alt.X(selected_column, bin=alt.Bin(maxbins=30)),
-                    y='count()'
-                ).properties(width=600, height=400).interactive()
-                st.altair_chart(hist_chart, use_container_width=True)
+                # Calculs Simples
+                st.subheader("Calculs Simples :")
+                selected_calculation_column = st.selectbox("Choisis une colonne pour les calculs :", numeric_columns)
+                if selected_calculation_column:
+                    st.write(f"Moyenne de {selected_calculation_column}: {data[selected_calculation_column].mean():.2f}")
+                    st.write(f"Médiane de {selected_calculation_column}: {data[selected_calculation_column].median():.2f}")
+                    st.write(f"Minimum de {selected_calculation_column}: {data[selected_calculation_column].min()}")
+                    st.write(f"Maximum de {selected_calculation_column}: {data[selected_calculation_column].max()}")
+                    st.write(f"Somme de {selected_calculation_column}: {data[selected_calculation_column].sum():.2f}")
 
-                st.subheader("Relations entre les Chiffres :")
-                numeric_data = data.select_dtypes(include=['number'])
-                if not numeric_data.empty:
-                    fig, ax = plt.subplots()
-                    sns.heatmap(numeric_data.corr(), annot=True, cmap='coolwarm', fmt='.2f', ax=ax)
-                    st.pyplot(fig)
+                # Pourcentages (si au moins une colonne non numérique existe)
+                non_numeric_columns = data.select_dtypes(exclude=["number"]).columns.tolist()
+                if non_numeric_columns:
+                    st.subheader("Pourcentages :")
+                    selected_percentage_column = st.selectbox("Choisis une colonne pour les pourcentages :", non_numeric_columns)
+                    if selected_percentage_column:
+                        total_count = len(data)
+                        value_counts = data[selected_percentage_column].value_counts()
+                        percentages = (value_counts / total_count) * 100
+                        st.write(percentages.rename("Pourcentage"))
+
+                # Visualisation des Données (Nuage de Points)
+                st.subheader("Nuage de Points :")
+                if len(numeric_columns) >= 2:
+                    x_column = st.selectbox("Choisis la colonne pour l'axe des X :", numeric_columns)
+                    y_column = st.selectbox("Choisis la colonne pour l'axe des Y :", numeric_columns)
+                    if x_column and y_column:
+                        scatter_chart = alt.Chart(data).mark_circle().encode(
+                            x=x_column,
+                            y=y_column,
+                            tooltip=[x_column, y_column]
+                        ).properties(width=600, height=400).interactive()
+                        st.altair_chart(scatter_chart, use_container_width=True)
                 else:
-                    st.info("Pas de chiffres à comparer ici.")
+                    st.info("Il faut au moins deux colonnes numériques pour faire un nuage de points.")
+
+                # Visualisation des Données (Boîtes à Moustaches)
+                st.subheader("Boîtes à Moustaches :")
+                if len(numeric_columns) >= 1 and len(non_numeric_columns) >= 1:
+                    boxplot_y_column = st.selectbox("Choisis la colonne numérique :", numeric_columns)
+                    boxplot_x_column = st.selectbox("Choisis la colonne de catégories :", non_numeric_columns)
+                    if boxplot_y_column and boxplot_x_column:
+                        boxplot_chart = alt.Chart(data).mark_boxplot().encode(
+                            x=boxplot_x_column,
+                            y=boxplot_y_column,
+                            tooltip=[boxplot_x_column, boxplot_y_column]
+                        ).properties(width=600, height=400).interactive()
+                        st.altair_chart(boxplot_chart, use_container_width=True)
+                else:
+                    st.info("Il faut au moins une colonne numérique et une colonne de catégories pour faire une boîte à moustaches.")
 
             else:
-                st.info("Pas de chiffres à montrer en graphique.")
+                st.info("Il faut des colonnes avec des chiffres pour faire des analyses.")
+
+            # Filtres
+            st.subheader("Filtrer tes Données :")
+            for col in data.columns:
+                unique_values = data[col].unique()
+                if len(unique_values) < 50:  # Pour ne pas afficher trop de valeurs
+                    selected_values = st.multiselect(f"Filtrer par {col}:", unique_values)
+                    if selected_values:
+                        data = data[data[col].isin(selected_values)]
+                        st.subheader("Données Filtrées :")
+                        st.dataframe(data.head())
+
+            # Tri
+            st.subheader("Trier tes Données :")
+            sort_column = st.selectbox("Choisir une colonne pour trier :", data.columns)
+            ascending = st.checkbox("Trier du plus petit au plus grand", True)
+            if sort_column:
+                sorted_data = data.sort_values(by=sort_column, ascending=ascending)
+                st.subheader("Données Triées :")
+                st.dataframe(sorted_data.head())
+
+            # Sélection de Colonnes pour l'Aperçu
+            st.subheader("Choisir les Colonnes à Afficher :")
+            columns_to_show = st.multiselect("Sélectionne les colonnes :", data.columns, default=data.columns.tolist())
+            if columns_to_show:
+                st.subheader("Aperçu des Colonnes Sélectionnées :")
+                st.dataframe(data[columns_to_show].head())
 
             # Aide de l'IA (Marina AI)
             st.header("Pose tes Questions à Marina AI :")
+            st.write("Exemples de questions :")
+            st.write("- Quelle est la moyenne de [Nom de la colonne] ?")
+            st.write("- Y a-t-il une relation entre [Colonne A] et [Colonne B] ?")
+            st.write("- Montre-moi les données pour [Catégorie spécifique] dans [Nom de la colonne].")
             user_question = st.text_input("Pose ta question :")
 
             # Test de la connexion à l'API Mistral AI
@@ -137,7 +202,7 @@ if uploaded_file is not None:
                             payload = {
                                 "model": "mistral-tiny",
                                 "messages": [{"role": "user", "content": f"Voici les données : {data.head(5).to_csv(index=False)}. {question_directe}"}],
-                                "max_tokens": 80,
+                                "max_tokens": 100, # Augmenter un peu pour les réponses plus complexes
                                 "temperature": 0.3,
                             }
                             retries = 3
