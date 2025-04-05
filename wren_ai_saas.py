@@ -27,11 +27,11 @@ st.markdown(custom_css, unsafe_allow_html=True)
 # Titre et Introduction
 st.title("Expert en Données : Parle à tes Données !")
 st.write("""
-Cette plateforme t'aide à comprendre tes données et à résoudre des problèmes.
-- **Télécharge tes données** (CSV ou Excel)
-- **Regarde des graphiques**
-- **Pose des questions** comme si tu parlais à un ami
-- **Demande de l'aide à un expert si besoin**
+Cette plateforme vous aide à comprendre vos données et à résoudre des problèmes.
+- **Téléchargez vos données** (CSV ou Excel)
+- **Personnalisez vos graphiques**
+- **Interrogez vos données naturellement**
+- **Demandez de l'aide à Datacostexpert le spécialiste de la réduction de coûts*
 """)
 
 # Téléchargement et Aperçu des Données
