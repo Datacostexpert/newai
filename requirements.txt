@@ -4,3 +4,5 @@ altair
 seaborn
 matplotlib
 requests
+openpyxl
+numpy
