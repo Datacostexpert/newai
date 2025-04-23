@@ -58,7 +58,7 @@ if uploaded_file:
         st.error(f"❌ Erreur lors du chargement du fichier : {e}")
         data = None
 
-if data is not None:
+if data is not None and not data.empty:
     st.header("📋 Aperçu des Données")
     def highlight_missing(val):
         return 'background-color: red' if pd.isnull(val) else ''
@@ -80,6 +80,10 @@ if data is not None:
                 pass
     if "Unnamed: 0" in data.columns:
         data = data.drop(columns=["Unnamed: 0"])
+
+    # Sélection des types de colonnes
+    numeric_columns = data.select_dtypes(include=["number"]).columns.tolist()
+    categorical_columns = data.select_dtypes(include=["object"]).columns.tolist()
 
     # Résumé IA
     if st.checkbox("🧠 Obtenir un résumé automatique des données"):
@@ -113,8 +117,6 @@ if data is not None:
     st.write(data.describe())
 
     st.header("📈 Visualisation des Données")
-    numeric_columns = data.select_dtypes(include=["number"]).columns.tolist()
-    categorical_columns = data.select_dtypes(include=["object"]).columns.tolist()
 
     if numeric_columns:
         selected_column = st.selectbox("📌 Colonne pour histogramme", numeric_columns)
