@@ -164,7 +164,7 @@ if data is not None and not data.empty:
     if st.button("Demander à Mistral AI"):
         if user_question:
             with st.spinner("Analyse en cours..."):
-                headers = {"Authorization": f"Bearer {0AHCDGLvx7MFocAFM9Pw8lMAoFhZyNvu}", "Content-Type": "application/json"}
+             headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}", "Content-Type": "application/json"}
                 data_json = data.head(100).to_json(orient='records')
                 payload = {
                     "model": "mistral-tiny",
