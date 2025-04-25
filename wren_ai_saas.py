@@ -8,6 +8,9 @@ import requests
 import os
 import numpy as np
 
+# Remplacez 'YOUR_API_KEY' par votre clé API Mistral
+MISTRAL_API_KEY = "0AHCDGLvx7MFocAFM9Pw8lMAoFhZyNvu"
+
 # Style CSS personnalisé
 custom_css = """
 <style>
@@ -90,7 +93,7 @@ if data is not None and not data.empty:
         with st.spinner("Génération du résumé..."):
             sample_json = data.head(10).to_json(orient='records')
             prompt = f"Voici un échantillon des données : {sample_json}. Fais un résumé rapide : types, tendances, anomalies."
-            headers = {"Authorization": f"Bearer {os.getenv('MISTRAL_API_KEY')}", "Content-Type": "application/json"}
+            headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}", "Content-Type": "application/json"}
             payload = {
                 "model": "mistral-tiny",
                 "messages": [
@@ -105,7 +108,7 @@ if data is not None and not data.empty:
                 st.markdown("### 📾 Résumé IA")
                 st.write(summary)
             else:
-                st.error("Erreur de réponse de Mistral AI.")
+                st.error(f"Erreur de réponse de Mistral AI: {response.status_code}, {response.text}")
 
     st.subheader("🔍 Types de Données")
     st.write(data.dtypes)
@@ -161,7 +164,7 @@ if data is not None and not data.empty:
     if st.button("Demander à Mistral AI"):
         if user_question:
             with st.spinner("Analyse en cours..."):
-                headers = {"Authorization": f"Bearer {os.getenv('0AHCDGLvx7MFocAFM9Pw8lMAoFhZyNvu)}", "Content-Type": "application/json"}
+                headers = {"Authorization": f"Bearer {0AHCDGLvx7MFocAFM9Pw8lMAoFhZyNvu}", "Content-Type": "application/json"}
                 data_json = data.head(100).to_json(orient='records')
                 payload = {
                     "model": "mistral-tiny",
@@ -177,7 +180,7 @@ if data is not None and not data.empty:
                     st.subheader("💬 Réponse IA")
                     st.write(answer)
                 else:
-                    st.error("Erreur avec l’API Mistral.")
+                    st.error(f"Erreur avec l'API Mistral: {response.status_code}, {response.text}")
         else:
             st.warning("Entrez une question pour continuer.")
 else:
