@@ -6,3 +6,6 @@ matplotlib
 requests
 openpyxl
 numpy
+sklearn
+fpdf
+scikit-learn 
