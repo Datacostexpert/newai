@@ -1,0 +1,251 @@
+import streamlit as st
+import pandas as pd
+import altair as alt
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
+import os
+import requests
+import pydeck as pdk
+
+# Clé API Mistral
+MISTRAL_API_KEY = "0AHCDGLvx7MFocAFM9Pw8lMAoFhZyNvu"
+
+# Style CSS
+custom_css = """
+<style>
+div.stButton > button:first-child {
+    background-color: #4CAF50;
+    color: white;
+    border-radius: 10px;
+    height: 3em;
+    width: 100%;
+}
+h1 {
+    color: #4CAF50;
+    font-size: 2.5em;
+}
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
+
+# Sidebar
+with st.sidebar:
+    st.title("🔧 Paramètres")
+    uploaded_file_sidebar = st.file_uploader("📁 Téléchargez votre fichier CSV ou Excel", type=["csv", "xlsx", "xls"])
+
+# Titre
+st.title("Expert en Données : Interrogez vos Données et réduisez vos dépenses !")
+st.write("""
+Cette plateforme t'aide à comprendre tes données et à résoudre des problèmes.
+- **Téléchargez vos données** (CSV ou Excel)
+- **Visualisez et nettoyez vos données**
+- **Interrogez-les avec l'IA** (locale et potentiellement en ligne)
+""")
+
+uploaded_file = uploaded_file_sidebar
+data = None
+
+if uploaded_file:
+    try:
+        ext = os.path.splitext(uploaded_file.name)[1]
+        if ext in [".xlsx", ".xls"]:
+            data = pd.read_excel(uploaded_file)
+        else:
+            data = pd.read_csv(uploaded_file, on_bad_lines='skip')
+
+        # Nettoyage des colonnes indésirables et noms de colonnes
+        data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
+        data.columns = [col.encode('ascii', 'ignore').decode().replace(':', '').strip() for col in data.columns]
+
+        st.toast("Fichier chargé avec succès ✅", icon="📥")
+    except Exception as e:
+        st.error(f"❌ Erreur lors de chargement du fichier : {e}")
+        data = None
+
+if data is not None and not data.empty:
+    st.header("📋 Aperçu des Données")
+
+    def highlight_missing(val):
+        return 'background-color: red' if pd.isnull(val) else ''
+
+    st.dataframe(data.head().style.applymap(highlight_missing))
+
+    # Nettoyage
+    initial_rows = len(data)
+    data = data.dropna()
+    rows_dropped_na = initial_rows - len(data)
+    initial_rows = len(data)
+    data = data.drop_duplicates()
+    rows_dropped_duplicates = initial_rows - len(data)
+
+    for col in data.columns:
+        if data[col].dtype == 'object':
+            try:
+                data[col] = pd.to_numeric(data[col], errors='ignore')
+            except:
+                pass
+
+    # ➕ Conversion datetime
+    datetime_cols = []
+    for col in data.columns:
+        if data[col].dtype == 'object' or 'time' in col.lower():
+            try:
+                data[col] = pd.to_datetime(data[col])
+                datetime_cols.append(col)
+            except Exception:
+                continue
+
+    # 📊 Analyse temporelle
+    if datetime_cols:
+        st.subheader("🕒 Analyse Temporelle")
+        time_col = st.selectbox("🗓️ Colonne de temps", datetime_cols)
+        numeric_cols = data.select_dtypes(include=["number"]).columns.tolist()
+        if numeric_cols:
+            metric_col = st.selectbox("📈 Métrique à afficher", numeric_cols)
+            line_chart = alt.Chart(data).mark_line().encode(
+                x=alt.X(time_col, title="Temps"),
+                y=alt.Y(metric_col, title=metric_col),
+                tooltip=[time_col, metric_col]
+            ).interactive()
+            st.altair_chart(line_chart, use_container_width=True)
+
+    # 📈 Visualisation Top par Pays
+    st.header("🌍 Classement par Pays")
+    if 'Country' in data.columns:
+        metric_col_top = st.selectbox("📊 Sélectionnez une métrique à classer par pays", data.select_dtypes(include=['number']).columns)
+        top_n = st.slider("Nombre de pays à afficher", 1, 30, 10)
+        top_countries = data[['Country', metric_col_top]].groupby('Country').mean().sort_values(by=metric_col_top, ascending=False).head(top_n).reset_index()
+        bar_chart = alt.Chart(top_countries).mark_bar().encode(
+            x=alt.X('Country:N', sort='-y'),
+            y=alt.Y(metric_col_top),
+            tooltip=['Country', metric_col_top]
+        ).interactive()
+        st.altair_chart(bar_chart, use_container_width=True)
+
+    # 🗺️ Carte interactive par pays (si coordonnées disponibles)
+    st.header("🗺️ Carte interactive des indicateurs")
+    if 'Country' in data.columns:
+        from geopy.geocoders import Nominatim
+        geolocator = Nominatim(user_agent="streamlit-geolocator")
+        if 'lat' not in data.columns or 'lon' not in data.columns:
+            countries_unique = data['Country'].dropna().unique()
+            country_coords = {}
+            for c in countries_unique:
+                try:
+                    loc = geolocator.geocode(c)
+                    if loc:
+                        country_coords[c] = (loc.latitude, loc.longitude)
+                except:
+                    continue
+            coords_df = pd.DataFrame.from_dict(country_coords, orient='index', columns=['lat', 'lon']).reset_index()
+            coords_df.columns = ['Country', 'lat', 'lon']
+            data = pd.merge(data, coords_df, on='Country', how='left')
+
+        indicator_col = st.selectbox("📌 Indicateur à afficher sur la carte", data.select_dtypes(include=["number"]).columns)
+
+        map_data = data[['lat', 'lon', indicator_col]].dropna()
+        st.map(map_data.rename(columns={'lat': 'latitude', 'lon': 'longitude'}))
+
+    # 📊 Visualisations automatiques
+    st.header("📈 Visualisation Automatique")
+    numeric_columns = data.select_dtypes(include=["number"]).columns.tolist()
+
+    for col in numeric_columns:
+        st.markdown(f"### 📊 Histogramme de {col}")
+        hist_chart = alt.Chart(data).mark_bar().encode(
+            x=alt.X(col, bin=alt.Bin(maxbins=30)),
+            y='count()'
+        ).interactive()
+        st.altair_chart(hist_chart, use_container_width=True)
+
+    if len(numeric_columns) >= 2:
+        st.markdown("### 📌 Nuage de points (Scatter plot)")
+        x_col = st.selectbox("🟦 Axe X", numeric_columns, key="x")
+        y_col = st.selectbox("🟥 Axe Y", numeric_columns, key="y")
+        scatter_chart = alt.Chart(data).mark_circle(size=60).encode(
+            x=x_col, y=y_col, tooltip=[x_col, y_col]
+        ).interactive()
+        st.altair_chart(scatter_chart, use_container_width=True)
+
+    st.subheader("🔗 Corrélation entre variables")
+    fig, ax = plt.subplots()
+    sns.heatmap(data.corr(numeric_only=True), annot=True, cmap='coolwarm', fmt='.2f', ax=ax)
+    st.pyplot(fig)
+
+    st.subheader("💾 Télécharger les Données Nettoyées")
+    st.info(f"- {rows_dropped_na} lignes avec valeurs manquantes supprimées\n- {rows_dropped_duplicates} doublons supprimés")
+    st.download_button("📥 Télécharger les données nettoyées", data.to_csv(index=False), "donnees_nettoyees.csv")
+
+    # Résumé IA
+    if st.checkbox("🧠 Obtenir un résumé automatique des données"):
+        if MISTRAL_API_KEY:
+            with st.spinner("Génération du résumé avec Mistral AI..."):
+                sample_json = data.head(10).astype(str).to_json(orient='records')
+                prompt = f"Voici un échantillon des données : {sample_json}. Fais un résumé rapide : types, tendances, anomalies."
+                headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}", "Content-Type": "application/json"}
+                payload = {
+                    "model": "mistral-tiny",
+                    "messages": [
+                        {"role": "system", "content": "Vous êtes un analyste de données expérimenté."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "max_tokens": 300
+                }
+                try:
+                    response = requests.post("https://api.mistral.ai/v1/chat/completions", json=payload, headers=headers, timeout=10)
+                    response.raise_for_status()
+                    response_json = response.json()
+                    if "choices" in response_json:
+                        summary = response_json["choices"][0]["message"]["content"]
+                        st.markdown("### 📾 Résumé IA (Mistral AI)")
+                        st.write(summary)
+                    else:
+                        st.error("La réponse de l'API ne contient pas de résultat.")
+                        st.json(response_json)
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Erreur API Mistral : {e}. Utilisation du résumé local.")
+                    st.write("Colonnes numériques :", data.select_dtypes(include=["number"]).columns.tolist())
+                    st.write("Colonnes catégorielles :", data.select_dtypes(include=["object", "category"]).columns.tolist())
+                    st.write(data.describe())
+
+    # IA question libre
+    question = st.text_input("❓ Posez une question à l'IA")
+    if question:
+        if MISTRAL_API_KEY:
+            with st.spinner("Recherche de la réponse avec Mistral AI..."):
+                prompt = f"Voici les données : {data.head(10).astype(str).to_json(orient='records')}. Question : {question}"
+                headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}", "Content-Type": "application/json"}
+                payload = {
+                    "model": "mistral-tiny",
+                    "messages": [
+                        {"role": "system", "content": "Vous êtes un analyste de données expérimenté."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "max_tokens": 300
+                }
+                try:
+                    response = requests.post("https://api.mistral.ai/v1/chat/completions", json=payload, headers=headers, timeout=10)
+                    response.raise_for_status()
+                    response_json = response.json()
+                    if "choices" in response_json:
+                        answer = response_json["choices"][0]["message"]["content"]
+                        st.markdown("### Réponse de l'IA")
+                        st.write(answer)
+                    else:
+                        st.error("La réponse de l'API ne contient pas de résultat.")
+                        st.json(response_json)
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Erreur API Mistral : {e}")
+        else:
+            st.warning("🛠️ Clé API Mistral manquante, incapable d'interroger l'IA.")
+else:
+    st.info("""
+🎯 **Commencez votre analyse maintenant !**
+
+Téléchargez votre fichier **CSV ou Excel** pour :
+- Comprendre vos données
+- Identifier des leviers d’économies
+- Poser des questions à l’IA
+""")
